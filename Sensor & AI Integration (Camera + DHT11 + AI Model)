@@ -1,0 +1,53 @@
+import time
+import cv2
+import numpy as np
+import tensorflow as tf
+import Adafruit_DHT
+
+# Sensor setup
+DHT_SENSOR = Adafruit_DHT.DHT11
+DHT_PIN = 4
+
+# Load pre-trained model
+model = tf.keras.models.load_model('cattle_breed_model.h5')
+
+breed_labels = [
+    "Tharparkar", "Gir", "Kankrej", "Sahiwal", "Ongole",
+    "Red Sindhi", "Rathi", "Hariana", "Deoni", "Amrit Mahal",
+    "Hallikar", "Khillari", "Nagori", "Punganur", "Vechur",
+    "Malnad Gidda", "Kangayam", "Ponwar", "Kherigarh", "Gaolao"
+]
+
+# Camera setup
+camera = cv2.VideoCapture(0)
+print("Starting AI & Sensor Monitoring...")
+
+try:
+    while True:
+        # Capture frame
+        ret, frame = camera.read()
+        if not ret:
+            continue
+
+        # Preprocess image
+        img = cv2.resize(frame, (224, 224)) / 255.0
+        img = np.expand_dims(img, axis=0)
+
+        # Predict breed
+        predictions = model.predict(img)
+        breed = breed_labels[np.argmax(predictions)]
+
+        # Read DHT11 sensor
+        humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR, DHT_PIN)
+
+        print(f"\nDetected Breed: {breed}")
+        print(f"Temperature: {temperature:.1f}°C, Humidity: {humidity:.1f}%")
+
+        time.sleep(5)
+
+except KeyboardInterrupt:
+    print("Exiting...")
+
+finally:
+    camera.release()
+    cv2.destroyAllWindows()
