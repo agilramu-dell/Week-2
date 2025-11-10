@@ -1,0 +1,57 @@
+import time
+import cv2
+import numpy as np
+import tensorflow as tf
+import Adafruit_DHT
+import serial
+import requests
+
+# -------------------------
+# Sensor & Model Setup
+# -------------------------
+DHT_SENSOR = Adafruit_DHT.DHT11
+DHT_PIN = 4
+THINGSPEAK_API_KEY = "YOUR_API_KEY"
+
+model = tf.keras.models.load_model('cattle_breed_model.h5')
+breed_labels = ["Tharparkar", "Gir", "Kankrej", "Sahiwal", "Ongole"]
+
+# GPS Setup (using Neo-6M connected via UART)
+gps = serial.Serial("/dev/ttyAMA0", baudrate=9600, timeout=1)
+
+# Camera Setup
+camera = cv2.VideoCapture(0)
+
+def get_gps_data():
+    line = gps.readline().decode('ascii', errors='replace')
+    if line.startswith('$GPGGA'):
+        data = line.split(',')
+        if len(data) > 5 and data[2] and data[4]:
+            lat = float(data[2]) / 100
+            lon = float(data[4]) / 100
+            return lat, lon
+    return None, None
+
+print("Starting IoT-Enabled Cattle Monitoring System...")
+
+try:
+    while True:
+        # Capture and predict breed
+        ret, frame = camera.read()
+        if not ret:
+            continue
+        img = cv2.resize(frame, (224, 224)) / 255.0
+        img = np.expand_dims(img, axis=0)
+        breed = breed_labels[np.argmax(model.predict(img))]
+
+        # Read DHT11
+        humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR, DHT_PIN)
+
+        # Read GPS
+        lat, lon = get_gps_data()
+
+        print(f"\nBreed: {breed}")
+        print(f"Temp: {temperature:.1f}°C | Humidity: {humidity:.1f}%")
+        print(f"Location: Lat={lat}, Lon={lon}")
+
+        # Send
